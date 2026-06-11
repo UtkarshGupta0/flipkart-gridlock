@@ -1,0 +1,71 @@
+Demand Prediction — Project Notes
+==================================
+
+What this is
+------------
+Predicting demand (regression) from a mix of location, time, road and
+weather data. Ended up going with a 3-model gradient boosting ensemble
+with optimized blending weights. submission14 is currently the best.
+
+
+Data
+----
+Standard train/test CSVs. Target column is demand. Other columns are
+geohash, timestamp, Temperature, RoadType, LargeVehicles, Landmarks,
+Weather, and an Index column that's just an ID.
+
+
+Feature engineering
+-------------------
+The timestamp came in as HH:MM strings so I pulled out hour and minute,
+computed minutes since midnight, then encoded both as sine and cosine
+so the model knows 23:59 and 00:01 are actually close together. That
+cyclical trick matters more than people expect for time-of-day stuff.
+
+The location data was all in geohash format. Decoded each one to lat/lon
+using pygeohash and kept those as numeric features. Also kept the raw
+geohash as a categorical so the models can pick up on location-level
+patterns directly.
+
+Missing values — numeric ones (Temperature, lat, lon) got median-filled
+using training set stats only. Categorical nulls in RoadType and Weather
+just became 'Unknown'.
+
+Categorical features (geohash, RoadType, LargeVehicles, Landmarks,
+Weather) were cast to pandas category dtype so each model could handle
+them natively without me having to do label encoding or one-hot.
+
+
+Models
+------
+Ran three gradient boosters and blended them:
+
+CatBoost — depth 8, 12k iterations, lr 0.03, l2_leaf_reg 5,
+           early stopping at 4000 rounds, RMSE loss
+
+XGBoost  — max_depth 6, 3k estimators, lr 0.03, hist tree method,
+           early stopping at 50 rounds, lambda 3,
+           enable_categorical=True so it handles the cat dtype natively
+
+LightGBM — max_depth 8, 12k estimators, lr 0.03,
+           early stopping at 4000 rounds, lambda 3
+
+
+Ensemble
+--------
+Split 80/20 for validation, trained all three with early stopping on
+the 80%, then used scipy's SLSQP optimizer to find blend weights that
+maximize R2 on the validation set. Weights are constrained to [0,1]
+and forced to sum to 1.
+
+After finding the optimal weights I retrained all three on the full
+training data (same hyperparams, fixed iterations this time) and used
+those for the final test predictions.
+
+final prediction = w1*catboost + w2*xgboost + w3*lightgbm
+
+
+Libraries used
+--------------
+pandas, numpy, pygeohash, catboost, xgboost, lightgbm,
+sklearn (train_test_split, r2_score), scipy.optimize (minimize/SLSQP)
