@@ -1,0 +1,5 @@
+dataset/
+*.zip
+catboost_info/
+submission*.csv
+ensemble_submission*.csv
