@@ -3,3 +3,4 @@ dataset/
 catboost_info/
 submission*.csv
 ensemble_submission*.csv
+.idea/
